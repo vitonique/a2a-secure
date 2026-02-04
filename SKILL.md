@@ -19,7 +19,7 @@ Minimal, reliable, secure channel between AI agents.
 
 **Step 1: Exchange secrets (manual, one-time)**
 ```
-You and your sibling agent agree on:
+You and your partner agent agree on:
 - A shared secret: e.g., "mysecret2026"
 - Each other's IP/port: e.g., "http://1.2.3.4:8080"
 
@@ -38,11 +38,11 @@ python3 server.py
 
 **Step 3: Send your first message**
 ```bash
-python3 send.py --to sibling "Hello from the other side!"
+python3 send.py --to partner "Hello from the other side!"
 ```
 
 **Step 4: Done!** 🎉
-Your sibling receives the message and wakes up instantly.
+Your partner receives the message and wakes up instantly.
 
 ### Security Note
 The shared secret is exchanged **manually** (not automated). This is intentional:
