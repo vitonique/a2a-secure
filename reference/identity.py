@@ -104,6 +104,12 @@ def save_hot_key(hk: HotKey) -> None:
     with open(HOT_KEY_PATH, "w") as f:
         json.dump(data, f, indent=2)
 
+    # Lock down private key file permissions (owner read/write)
+    try:
+        os.chmod(HOT_KEY_PATH, 0o600)
+    except Exception:
+        pass
+
 
 def load_hot_key() -> Optional[HotKey]:
     try:
