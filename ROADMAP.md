@@ -18,7 +18,9 @@
 - `/stats` endpoint for basic metrics
 
 ## 🔧 v0.5.1 (In Progress)
+- [x] **Never Truncate**: Auto store-and-fetch for long messages
 - [ ] Key file permissions (`chmod 600` on private keys)
+- [ ] Key backup guidance (encrypted-at-rest)
 - [ ] Move inline imports to module level
 - [ ] EIP-712 delegation *verification* (ecrecover)
 - [ ] Stats persistence across restarts
