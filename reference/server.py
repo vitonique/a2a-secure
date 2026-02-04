@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A2A Server v2.4 Reference Implementation
+"""A2A Server v2.4 + v0.5.0 Identity Layer (Reference Implementation)
 
 Features:
 - Bearer token auth
@@ -7,6 +7,7 @@ Features:
 - Store-and-fetch for large payloads
 - Idempotency (24h TTL)
 - Schema versioning
+- v0.5.0 Identity Layer: Ed25519 hot keys, challenge-response handshake, message signature verification
 
 Usage:
 1. Set SECRET below (shared with peer)
@@ -28,6 +29,8 @@ import time
 import os
 import uuid
 
+from identity import get_or_create_hot_key, hot_key_valid, make_challenge, verify_nonce_sig, verify_message_dict
+
 # ============ CONFIGURE THESE ============
 # Step 1: Agree on a shared secret with your sibling agent
 #         Exchange this via secure DM, not public chat!
@@ -41,15 +44,20 @@ AGENT_SKILLS = ["research", "coding"]
 # =========================================
 
 # Schema versioning
-SCHEMA_VERSION = "2.3"
+SCHEMA_VERSION = "2.4"
 SCHEMA_MIN = "1.0"
-SCHEMA_MAX = "2.3"
+SCHEMA_MAX = "2.4"
+
+# Identity layer
+IDENTITY_VERSION = "0.5.0"
+CHALLENGE_TTL_SECONDS = 60
+PENDING_CHALLENGES = {}  # client_id -> {nonce_b64, ts}
 
 CARD = {
     "name": AGENT_NAME,
     "version": "2.4",
     "skills": AGENT_SKILLS,
-    "features": ["instant-wake", "aes-gcm", "store-and-fetch", "idempotency", "schema-versioning"],
+    "features": ["instant-wake", "aes-gcm", "store-and-fetch", "idempotency", "schema-versioning", "identity-v0.5.0"],
     "schema": {
         "current": SCHEMA_VERSION,
         "min_supported": SCHEMA_MIN,
@@ -176,6 +184,13 @@ def send_wake(message_text):
         return False
 
 
+def _cleanup_challenges():
+    now = int(time.time())
+    for cid in list(PENDING_CHALLENGES.keys()):
+        if now - int(PENDING_CHALLENGES[cid].get("ts", 0)) > CHALLENGE_TTL_SECONDS:
+            PENDING_CHALLENGES.pop(cid, None)
+
+
 class Handler(BaseHTTPRequestHandler):
 
     def _json(self, code: int, payload: dict):
@@ -280,7 +295,55 @@ class Handler(BaseHTTPRequestHandler):
                 "schema_version": SCHEMA_VERSION,
                 "mode": "fetch_ref",
             })
-        
+
+        # ---------------- Identity v0.5.0 handshake ----------------
+        if isinstance(data, dict) and data.get("type") == "SYN":
+            _cleanup_challenges()
+            client_id = data.get("from") or data.get("client_id") or "unknown"
+            chall = make_challenge()
+            PENDING_CHALLENGES[client_id] = {"nonce_b64": chall["nonce_b64"], "ts": chall["ts"]}
+            return self._json(200, {
+                "status": "CHALLENGE",
+                "from": AGENT_NAME,
+                "identity_version": IDENTITY_VERSION,
+                "nonce_b64": chall["nonce_b64"],
+                "expires_in": CHALLENGE_TTL_SECONDS,
+            })
+
+        if isinstance(data, dict) and data.get("type") == "AUTH":
+            _cleanup_challenges()
+            client_id = data.get("from") or data.get("client_id") or "unknown"
+            pending = PENDING_CHALLENGES.get(client_id)
+            if not pending:
+                return self._json(400, {"error": "no_pending_challenge"})
+            nonce_b64 = pending.get("nonce_b64")
+            hot_pub_b64 = (data.get("identity") or {}).get("hot_pub_b64")
+            nonce_sig_b64 = (data.get("identity") or {}).get("nonce_sig_b64")
+            if not hot_pub_b64 or not nonce_sig_b64:
+                return self._json(400, {"error": "missing_identity_fields"})
+            try:
+                hot_pub_raw = __import__("base64").b64decode(hot_pub_b64)
+            except Exception:
+                return self._json(400, {"error": "bad_hot_pub_b64"})
+            if len(hot_pub_raw) != 32:
+                return self._json(400, {"error": "hot_pubkey_wrong_length"})
+            if not verify_nonce_sig(hot_pub_raw, nonce_b64, nonce_sig_b64):
+                return self._json(401, {"error": "nonce_signature_invalid"})
+            # success
+            PENDING_CHALLENGES.pop(client_id, None)
+            return self._json(200, {"status": "CONNECTED", "from": AGENT_NAME, "identity_version": IDENTITY_VERSION})
+
+        # ---------------- Normal message with optional signature verification ----------------
+        if isinstance(data, dict) and data.get("sig") and (data.get("identity") or {}).get("hot_pub_b64"):
+            try:
+                hot_pub_raw = __import__("base64").b64decode((data.get("identity") or {}).get("hot_pub_b64"))
+            except Exception:
+                hot_pub_raw = b""
+            if len(hot_pub_raw) == 32:
+                ok = verify_message_dict(hot_pub_raw, data, data.get("sig"))
+                if not ok:
+                    return self._json(401, {"error": "message_signature_invalid"})
+
         # Normal message
         msg = data.get("message") if isinstance(data, dict) else body
         if msg is None:
