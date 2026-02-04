@@ -57,12 +57,26 @@ CARD = {
     "name": AGENT_NAME,
     "version": "2.4",
     "skills": AGENT_SKILLS,
-    "features": ["instant-wake", "aes-gcm", "store-and-fetch", "idempotency", "schema-versioning", "identity-v0.5.0"],
+    "features": ["instant-wake", "aes-gcm", "store-and-fetch", "idempotency", "schema-versioning", "identity-v0.5.0", "stats"],
     "schema": {
         "current": SCHEMA_VERSION,
         "min_supported": SCHEMA_MIN,
         "max_supported": SCHEMA_MAX,
     },
+}
+
+# Runtime stats (simple in-memory counters)
+START_TS = int(time.time())
+STATS = {
+    "messages_received": 0,
+    "messages_acked": 0,
+    "wake_attempts": 0,
+    "wake_success": 0,
+    "auth_handshakes": 0,
+    "auth_failures": 0,
+    "idempotency_hits": 0,
+    "uptime_seconds": 0,
+    "last_message_at": None,
 }
 
 # Storage config
@@ -167,13 +181,17 @@ def cleanup_expired():
 
 def send_wake(message_text):
     """Send instant wake via OpenClaw CLI."""
+    STATS["wake_attempts"] += 1
     try:
         params = {"text": f"[A2A] {message_text[:500]}", "mode": "now"}
         result = subprocess.run(
             ["/usr/bin/openclaw", "gateway", "call", "wake", "--params", json.dumps(params)],
             capture_output=True, text=True, timeout=15
         )
-        return result.returncode == 0
+        ok = result.returncode == 0
+        if ok:
+            STATS["wake_success"] += 1
+        return ok
     except Exception:
         # Fallback: write trigger file for heartbeat pickup
         try:
@@ -205,6 +223,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path == "":
             return self._json(200, CARD)
+
+        if self.path == "/stats":
+            STATS["uptime_seconds"] = int(time.time()) - START_TS
+            return self._json(200, STATS)
         
         if self.path.startswith("/messages/"):
             msg_id = self.path.split("/messages/", 1)[1]
@@ -245,11 +267,16 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             data = {"message": body}
         
+        STATS["messages_received"] += 1
+        STATS["last_message_at"] = int(time.time())
+
         # Check idempotency
         idem_key = data.get("idempotency_key") if isinstance(data, dict) else None
         if idem_key:
             cached = check_idempotency(idem_key)
             if cached:
+                STATS["idempotency_hits"] += 1
+                STATS["messages_acked"] += 1
                 return self._json(200, cached)
         
         # Store endpoint
@@ -302,6 +329,7 @@ class Handler(BaseHTTPRequestHandler):
             client_id = data.get("from") or data.get("client_id") or "unknown"
             chall = make_challenge()
             PENDING_CHALLENGES[client_id] = {"nonce_b64": chall["nonce_b64"], "ts": chall["ts"]}
+            STATS["auth_handshakes"] += 1
             return self._json(200, {
                 "status": "CHALLENGE",
                 "from": AGENT_NAME,
@@ -315,22 +343,28 @@ class Handler(BaseHTTPRequestHandler):
             client_id = data.get("from") or data.get("client_id") or "unknown"
             pending = PENDING_CHALLENGES.get(client_id)
             if not pending:
+                STATS["auth_failures"] += 1
                 return self._json(400, {"error": "no_pending_challenge"})
             nonce_b64 = pending.get("nonce_b64")
             hot_pub_b64 = (data.get("identity") or {}).get("hot_pub_b64")
             nonce_sig_b64 = (data.get("identity") or {}).get("nonce_sig_b64")
             if not hot_pub_b64 or not nonce_sig_b64:
+                STATS["auth_failures"] += 1
                 return self._json(400, {"error": "missing_identity_fields"})
             try:
                 hot_pub_raw = __import__("base64").b64decode(hot_pub_b64)
             except Exception:
+                STATS["auth_failures"] += 1
                 return self._json(400, {"error": "bad_hot_pub_b64"})
             if len(hot_pub_raw) != 32:
+                STATS["auth_failures"] += 1
                 return self._json(400, {"error": "hot_pubkey_wrong_length"})
             if not verify_nonce_sig(hot_pub_raw, nonce_b64, nonce_sig_b64):
+                STATS["auth_failures"] += 1
                 return self._json(401, {"error": "nonce_signature_invalid"})
             # success
             PENDING_CHALLENGES.pop(client_id, None)
+            STATS["messages_acked"] += 1
             return self._json(200, {"status": "CONNECTED", "from": AGENT_NAME, "identity_version": IDENTITY_VERSION})
 
         # ---------------- Normal message with optional signature verification ----------------
@@ -342,6 +376,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(hot_pub_raw) == 32:
                 ok = verify_message_dict(hot_pub_raw, data, data.get("sig"))
                 if not ok:
+                    STATS["auth_failures"] += 1
                     return self._json(401, {"error": "message_signature_invalid"})
 
         # Normal message
@@ -352,6 +387,7 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[A2A] Received (schema v{detected_version}): {str(msg)[:200]}", flush=True)
         wake_sent = send_wake(str(msg))
         
+        STATS["messages_acked"] += 1
         response = {
             "status": "OK",
             "from": AGENT_NAME,
