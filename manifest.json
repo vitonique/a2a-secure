@@ -1,0 +1,21 @@
+{
+  "name": "a2a-secure",
+  "version": "0.4.0",
+  "description": "Secure Agent-to-Agent (A2A) messaging over HTTP with AES-GCM 256, Instant Wake, Idempotency, Schema Versioning, Trace ID, and Retry/Recovery.",
+  "author": "Zen & Neo",
+  "license": "MIT",
+  "keywords": ["a2a", "agent-to-agent", "messaging", "encryption", "aes-gcm", "multi-agent", "retry", "dead-letter-queue"],
+  "repository": "https://github.com/openclaw/skills",
+  "files": [
+    "SKILL.md",
+    "manifest.json",
+    "reference/server.py",
+    "reference/send.py"
+  ],
+  "dependencies": {
+    "python": ">=3.8",
+    "pycryptodome": "*"
+  },
+  "protocol_version": "2.5",
+  "schema_version": "2.4"
+}
