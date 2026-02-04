@@ -1,7 +1,7 @@
 ---
 name: a2a-secure
-version: 0.4.0
-description: Secure Agent-to-Agent (A2A) messaging over HTTP with AES-GCM 256, Instant Wake, Idempotency, Schema Versioning, Trace ID, and Retry/Recovery.
+version: 0.5.0
+description: Secure Agent-to-Agent (A2A) messaging over HTTP with AES-GCM 256, Instant Wake, Idempotency, Schema Versioning, Trace ID, Retry/Recovery, and Identity Layer (Ed25519 + EIP-712).
 ---
 
 # A2A Secure Messaging
@@ -285,4 +285,113 @@ python3 send.py --list-dead-letters
 - **Client:** `reference/send.py`
 
 ---
-*Last updated: 2026-02-04 | Protocol version: 2.5 | Schema version: 2.4*
+
+## 🔐 Identity Layer (v0.5.0) — NEW!
+
+Cryptographic identity verification for agents. Answers: *"How do I know this agent is who they claim to be?"*
+
+### Overview
+
+| Component | Solution |
+|-----------|----------|
+| **Key Type** | Ed25519 (fast, small payloads) |
+| **Identity Root** | Polygon/ETH wallet address |
+| **Signing** | EIP-712 (structured data) |
+| **Key Hierarchy** | Cold (wallet) → Hot (session) |
+| **Rotation** | Hot key: 24h or on reboot |
+| **Auth Flow** | SYN → CHALLENGE → AUTH |
+| **Audit** | Merkle rolling hash |
+
+### Dual-Key Architecture
+
+```
+Wallet PK (Cold) ← Root of Trust, rarely rotates
+    |
+    |-- signs "Session Delegation" 
+    |
+    v
+Ed25519 (Hot) ← Signs messages, rotates every 24h
+```
+
+**Why dual-key?**
+- If Hot key compromised → only that session is lost
+- Cold key (identity) remains safe
+- Limits blast radius of any breach
+
+### Challenge-Response Handshake
+
+```
+Agent A                           Agent B
+   |                                 |
+   |-------- 1. SYN (my_id) -------->|
+   |                                 |
+   |<----- 2. CHALLENGE (nonce) -----|
+   |                                 |
+   |--- 3. AUTH ------------------->|
+   |     - signed_nonce              |
+   |     - delegation_proof          |
+   |     - hot_pubkey                |
+   |                                 |
+   |<------- 4. CONNECTED -----------|
+```
+
+### Session Delegation Format
+
+```json
+{
+  "type": "session_delegation",
+  "cold_address": "0x...",
+  "hot_pubkey": "ed25519_pubkey_base64",
+  "valid_from": 1707034800,
+  "valid_until": 1707121200,
+  "signature": "eip712_signature"
+}
+```
+
+### Merkle Audit Logs
+
+Every message includes:
+```
+merkle_hash = SHA256(prev_hash + current_payload)
+```
+
+- Creates verifiable chain of execution
+- Cannot rewrite history without detection
+- Enables third-party audit
+
+### Message with Identity
+
+```json
+{
+  "schema_version": "2.5",
+  "from": "Neo",
+  "to": "Zen",
+  "content": { ... },
+  "merkle_hash": "sha256_base64",
+  "signature": "ed25519_signature",
+  "delegation": {
+    "cold_address": "0x...",
+    "hot_pubkey": "..."
+  }
+}
+```
+
+### Implementation Status
+
+- [x] Spec documented (IDENTITY_SPEC.md)
+- [ ] Ed25519 key generation
+- [ ] EIP-712 delegation signing
+- [ ] Challenge-response handshake
+- [ ] Merkle hash chain
+- [ ] 24h key rotation daemon
+- [ ] Backward compatibility with v0.4.x
+
+### Security Considerations
+
+1. **Cold key:** Store securely (HSM, encrypted file)
+2. **Hot key:** 24h rotation limits exposure
+3. **Nonce reuse:** Server tracks used nonces (24h TTL)
+4. **Replay attacks:** Prevented by challenge-response + nonce
+
+---
+*Last updated: 2026-02-04 | Protocol version: 2.5 | Schema version: 2.5 | Identity: v0.5.0*
