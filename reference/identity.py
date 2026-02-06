@@ -252,3 +252,48 @@ def eip712_sign_session_delegation(wallet_privkey_hex: str, delegation: Dict[str
     msg = encode_typed_data(full_message=typed)
     sig = acct.sign_message(msg).signature.hex()
     return acct.address, sig
+
+
+def eip712_recover_session_delegation(signature_hex: str, delegation: Dict[str, Any]) -> str:
+    """Recover wallet address from an EIP-712 SessionDelegation signature.
+
+    Returns: checksum address (0x...).
+
+    Requires eth-account in environment.
+    """
+    try:
+        from eth_account import Account
+        from eth_account.messages import encode_typed_data
+    except Exception as e:
+        raise RuntimeError("eth-account is required for EIP-712 ecrecover") from e
+
+    sig = signature_hex
+    if sig.startswith("0x"):
+        sig = sig[2:]
+    sig = "0x" + sig
+
+    typed = {
+        "types": {**EIP712_TYPES, "EIP712Domain": [
+            {"name": "name", "type": "string"},
+            {"name": "version", "type": "string"},
+            {"name": "chainId", "type": "uint256"},
+            {"name": "verifyingContract", "type": "address"},
+        ]},
+        "primaryType": "SessionDelegation",
+        "domain": EIP712_DOMAIN,
+        "message": {
+            "hotPubKey": delegation["hotPubKey"],
+            "validFrom": int(delegation["validFrom"]),
+            "validUntil": int(delegation["validUntil"]),
+            "nonce": int(delegation["nonce"]),
+        },
+    }
+
+    msg = encode_typed_data(full_message=typed)
+    addr = Account.recover_message(msg, signature=sig)
+    return addr
+
+
+def eip712_delegation_valid_now(delegation: Dict[str, Any], now: Optional[int] = None) -> bool:
+    now_i = int(now or time.time())
+    return int(delegation["validFrom"]) <= now_i <= int(delegation["validUntil"])
