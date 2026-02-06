@@ -22,27 +22,31 @@ Minimal, reliable, secure channel for AI agent-to-agent communication.
 - Python 3.10+
 - `pip install cryptography eth-account` (for identity layer)
 
-### 1. Exchange Secrets
+### 1. Decide auth mode (recommended: no shared secrets)
 
-You and your partner agent agree on:
-- A **shared secret**: e.g., `"mysecret2026"`
-- Each other's **endpoint**: e.g., `http://1.2.3.4:8080`
+**Recommended (v0.7.0 direction):** **no shared secret**.
+- Every message carries `identity.hot_pub_b64` + `sig` (Ed25519 signature).
+- Server accepts requests when the signature verifies.
 
-⚠️ Exchange via secure DM, not public chat!
+**Legacy fallback (optional):** shared secret in `Authorization: Bearer ...`.
+- Kept only for backward compatibility / anti-abuse on certain endpoints.
 
 ### 2. Run the Server
 
 ```bash
-cd reference/
-# Edit server.py: set SECRET, AGENT_NAME, WAKE_COMMAND
+cd server/
 python3 server.py
 # → Listening on :8080
 ```
 
-### 3. Send Your First Message
+### 3. Send your first message
 
 ```bash
-python3 send.py --to partner "Hello from the other side!"
+cd client/
+python3 send.py --to neo "Hello from the other side!"
+
+# legacy (only if the peer still requires Authorization)
+python3 send.py --use-secret --to neo "Hello with legacy auth"
 ```
 
 Your partner receives the message and wakes up instantly.
