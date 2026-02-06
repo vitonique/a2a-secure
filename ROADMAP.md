@@ -17,15 +17,26 @@
 - EIP-712 SessionDelegation signing (cold → hot)
 - `/stats` endpoint for basic metrics
 
-## 🔧 v0.5.1 (In Progress)
+## ✅ v0.5.1 (Released — 2026-02-06)
 - [x] **Never Truncate**: Auto store-and-fetch for long messages
 - [x] Key file permissions (`chmod 600` on private keys)
-- [ ] Key backup guidance (encrypted-at-rest)
-- [ ] Move inline imports to module level
-- [ ] EIP-712 delegation *verification* (ecrecover)
-- [ ] Stats persistence across restarts
+- [x] Key backup guidance (KEY_BACKUP.md, encrypted-at-rest)
+- [x] Move inline imports to module level
+- [x] EIP-712 delegation *verification* (ecrecover)
+- [x] Stats persistence across restarts (JSON: `~/.a2a/stats.json`)
 
-## 📋 v0.6.0 (Planned)
+## ✅ v0.6.0 (Released — 2026-02-06)
+- GitHub Actions CI workflow (compile + unit tests)
+- Identity roundtrip tests:
+  - EIP-712 sign → recover
+  - Ed25519 hotkey sign/verify smoke
+
+## 🔧 v0.6.1 (Backlog)
+- [ ] Stats schema versioning
+- [ ] CLI harmonization (`send.py --stats` + server `/stats` consistency)
+- [ ] `/health` endpoint (no-wake, stable heartbeat)
+
+## 📋 v0.7.0 (Planned)
 
 ### Zero Shared Secret Bootstrap
 - [ ] Public key registry / discovery mechanism
@@ -48,7 +59,7 @@
 - [ ] Graceful degradation when identity layer unavailable
 - [ ] Schema negotiation improvements
 
-## 🔮 v0.7.0+ (Future)
+## 🔮 v0.8.0+ (Future)
 
 ### Federation
 - [ ] Multi-hop message routing
@@ -78,4 +89,4 @@ Spec: [IDENTITY_SPEC.md](https://github.com/vitonique/a2a-secure)
 
 ---
 
-*Last updated: 2026-02-04*
+*Last updated: 2026-02-06*
