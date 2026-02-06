@@ -23,6 +23,7 @@ Endpoints:
 """
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import base64
 import json
 import subprocess
 import time
@@ -30,6 +31,7 @@ import os
 import uuid
 
 from identity import get_or_create_hot_key, hot_key_valid, make_challenge, verify_nonce_sig, verify_message_dict
+from stats import load_stats, atomic_write_json, bump, set_if_missing, now_ts
 
 # ============ CONFIGURE THESE ============
 # Step 1: Agree on a shared secret with your sibling agent
@@ -65,19 +67,24 @@ CARD = {
     },
 }
 
-# Runtime stats (simple in-memory counters)
+# Runtime stats (persisted)
 START_TS = int(time.time())
-STATS = {
-    "messages_received": 0,
-    "messages_acked": 0,
-    "wake_attempts": 0,
-    "wake_success": 0,
-    "auth_handshakes": 0,
-    "auth_failures": 0,
-    "idempotency_hits": 0,
-    "uptime_seconds": 0,
-    "last_message_at": None,
-}
+STATS_PATH = os.path.expanduser("~/.a2a/stats.json")
+STATS = load_stats(STATS_PATH)
+# Initialize required fields
+set_if_missing(STATS, "messages_received", 0)
+set_if_missing(STATS, "messages_sent", 0)
+set_if_missing(STATS, "avg_latency_ms", 0.0)  # client-side updates; kept for visibility
+set_if_missing(STATS, "retries_total", 0)
+set_if_missing(STATS, "dupes_blocked", 0)
+set_if_missing(STATS, "wake_calls", 0)
+set_if_missing(STATS, "last_restart_ts", now_ts())
+set_if_missing(STATS, "uptime_seconds", 0)
+# Internal (optional) fields we may maintain
+set_if_missing(STATS, "_schema", "v0.5.1")
+# Update last restart on each server boot
+STATS["last_restart_ts"] = now_ts()
+atomic_write_json(STATS_PATH, STATS)
 
 # Storage config
 MAX_INLINE_BYTES = 8000
@@ -179,9 +186,19 @@ def cleanup_expired():
         pass
 
 
+def _persist_stats():
+    # best-effort; never break message handling
+    try:
+        STATS["uptime_seconds"] = int(time.time()) - START_TS
+        atomic_write_json(STATS_PATH, STATS)
+    except Exception:
+        pass
+
+
 def send_wake(message_text):
     """Send instant wake via OpenClaw CLI."""
-    STATS["wake_attempts"] += 1
+    bump(STATS, "wake_calls", 1)
+    _persist_stats()
     try:
         params = {"text": f"[A2A] {message_text[:500]}", "mode": "now"}
         result = subprocess.run(
@@ -189,8 +206,10 @@ def send_wake(message_text):
             capture_output=True, text=True, timeout=15
         )
         ok = result.returncode == 0
+        # wake_success not part of persisted schema; keep optional if present
         if ok:
-            STATS["wake_success"] += 1
+            STATS["wake_success"] = int(STATS.get("wake_success", 0) or 0) + 1
+            _persist_stats()
         return ok
     except Exception:
         # Fallback: write trigger file for heartbeat pickup
@@ -267,16 +286,18 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             data = {"message": body}
         
-        STATS["messages_received"] += 1
+        bump(STATS, "messages_received", 1)
         STATS["last_message_at"] = int(time.time())
+        _persist_stats()
 
         # Check idempotency
         idem_key = data.get("idempotency_key") if isinstance(data, dict) else None
         if idem_key:
             cached = check_idempotency(idem_key)
             if cached:
-                STATS["idempotency_hits"] += 1
-                STATS["messages_acked"] += 1
+                bump(STATS, "dupes_blocked", 1)
+                STATS["messages_acked"] = int(STATS.get("messages_acked", 0) or 0) + 1
+                _persist_stats()
                 return self._json(200, cached)
         
         # Store endpoint
@@ -352,7 +373,7 @@ class Handler(BaseHTTPRequestHandler):
                 STATS["auth_failures"] += 1
                 return self._json(400, {"error": "missing_identity_fields"})
             try:
-                hot_pub_raw = __import__("base64").b64decode(hot_pub_b64)
+                hot_pub_raw = base64.b64decode(hot_pub_b64)
             except Exception:
                 STATS["auth_failures"] += 1
                 return self._json(400, {"error": "bad_hot_pub_b64"})
@@ -370,7 +391,7 @@ class Handler(BaseHTTPRequestHandler):
         # ---------------- Normal message with optional signature verification ----------------
         if isinstance(data, dict) and data.get("sig") and (data.get("identity") or {}).get("hot_pub_b64"):
             try:
-                hot_pub_raw = __import__("base64").b64decode((data.get("identity") or {}).get("hot_pub_b64"))
+                hot_pub_raw = base64.b64decode((data.get("identity") or {}).get("hot_pub_b64"))
             except Exception:
                 hot_pub_raw = b""
             if len(hot_pub_raw) == 32:

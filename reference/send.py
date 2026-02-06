@@ -23,6 +23,8 @@ import uuid
 import urllib.request
 import urllib.error
 
+from stats import load_stats, atomic_write_json, bump, set_if_missing, update_running_avg
+
 # ============ CONFIG ============
 # Add your sibling agents here
 # Exchange URLs and secrets via secure DM (not public chat!)
@@ -49,6 +51,28 @@ os.makedirs(DEAD_LETTER_DIR, exist_ok=True)
 # Schema
 SCHEMA_VERSION = "2.4"
 # ================================
+
+# Stats persistence (shared with server)
+STATS_PATH = os.path.expanduser("~/.a2a/stats.json")
+STATS = load_stats(STATS_PATH)
+set_if_missing(STATS, "messages_received", 0)
+set_if_missing(STATS, "messages_sent", 0)
+set_if_missing(STATS, "avg_latency_ms", 0.0)
+set_if_missing(STATS, "retries_total", 0)
+set_if_missing(STATS, "dupes_blocked", 0)
+set_if_missing(STATS, "wake_calls", 0)
+set_if_missing(STATS, "last_restart_ts", None)
+set_if_missing(STATS, "uptime_seconds", 0)
+# internal fields for avg calc
+set_if_missing(STATS, "_latency_samples", 0)
+atomic_write_json(STATS_PATH, STATS)
+
+
+def _persist_stats():
+    try:
+        atomic_write_json(STATS_PATH, STATS)
+    except Exception:
+        pass
 
 
 def generate_trace_id():
@@ -86,10 +110,19 @@ def send_message(peer_name: str, message: str, wake: bool = True, trace_id: str 
     
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
+        t0 = time.time()
         try:
             req = urllib.request.Request(peer["url"], data=data, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
                 response_data = json.loads(resp.read().decode())
+                dt_ms = (time.time() - t0) * 1000.0
+                bump(STATS, "messages_sent", 1)
+                update_running_avg(STATS, "avg_latency_ms", "_latency_samples", dt_ms)
+                # retries_total counts extra attempts beyond the first
+                if attempt > 1:
+                    bump(STATS, "retries_total", attempt - 1)
+                _persist_stats()
+
                 print(f"✅ [{trace_id}] Sent to {peer_name} (attempt {attempt})")
                 return {
                     "success": True,
@@ -97,6 +130,7 @@ def send_message(peer_name: str, message: str, wake: bool = True, trace_id: str 
                     "error": None,
                     "attempts": attempt,
                     "trace_id": trace_id,
+                    "latency_ms": dt_ms,
                 }
         except urllib.error.HTTPError as e:
             last_error = f"HTTP {e.code}: {e.reason}"
