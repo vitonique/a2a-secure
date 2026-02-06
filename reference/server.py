@@ -73,6 +73,23 @@ CARD = {
     },
 }
 
+# v0.7.0: lightweight public discovery doc (no secret required)
+# Exposed at: GET /.well-known/a2a.json
+WELL_KNOWN = {
+    "protocol": "a2a-secure",
+    "schema_version": SCHEMA_VERSION,
+    "agent": {
+        "name": AGENT_NAME,
+        "url": "http://0.0.0.0:8080",
+        "skills": AGENT_SKILLS,
+        "features": CARD["features"],
+    },
+    "identity": {
+        "identity_version": IDENTITY_VERSION,
+        # NOTE: wallet binding + registries land in later v0.7.0 tasks
+    },
+}
+
 # Runtime stats (persisted)
 START_TS = int(time.time())
 STATS_PATH = os.path.expanduser("~/.a2a/stats.json")
@@ -246,6 +263,10 @@ class Handler(BaseHTTPRequestHandler):
         self._json(401, {"error": "Unauthorized"})
 
     def do_GET(self):
+        # Public discovery document (no auth)
+        if self.path == "/.well-known/a2a.json":
+            return self._json(200, WELL_KNOWN)
+
         if self.path == "/" or self.path == "":
             return self._json(200, CARD)
 
