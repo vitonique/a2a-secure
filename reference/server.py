@@ -243,6 +243,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/" or self.path == "":
             return self._json(200, CARD)
 
+        # Lightweight health endpoint (no wake)
+        if self.path == "/health":
+            now_i = int(time.time())
+            STATS["uptime_seconds"] = now_i - START_TS
+            health = {
+                "status": "OK",
+                "from": AGENT_NAME,
+                "version": CARD.get("version"),
+                "schema_version": SCHEMA_VERSION,
+                "identity_version": IDENTITY_VERSION,
+                "ts": now_i,
+                "uptime_seconds": STATS.get("uptime_seconds"),
+                "messages_received": STATS.get("messages_received"),
+                "messages_sent": STATS.get("messages_sent"),
+                "avg_latency_ms": STATS.get("avg_latency_ms"),
+                "retries_total": STATS.get("retries_total"),
+                "dupes_blocked": STATS.get("dupes_blocked"),
+                "wake_calls": STATS.get("wake_calls"),
+                "last_restart_ts": STATS.get("last_restart_ts"),
+            }
+            return self._json(200, health)
+
         if self.path == "/stats":
             STATS["uptime_seconds"] = int(time.time()) - START_TS
             return self._json(200, STATS)
