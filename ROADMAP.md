@@ -34,8 +34,8 @@
 ## 🔧 v0.7.0 (In Progress)
 
 ### Zero Shared Secret Bootstrap (PRIORITY)
-- [x] ETH wallet setup (Zen + Neo)
-- [x] Age encryption key exchange
+- [x] ETH wallet setup (example implementation)
+- [x] Age encryption key exchange (optional backup layer)
 - [ ] Public key registry / discovery mechanism
 - [ ] First-contact via signed introduction (no pre-shared secret)
 - [ ] `require_signature=true` server flag
@@ -83,14 +83,6 @@
 
 ---
 
-## Agent Wallets (v0.7.0)
-
-| Agent | ETH Wallet | Age Public Key |
-|-------|------------|----------------|
-| Zen 🧘 | `0x95D8Eb255ee4bA3101595aAe4E3200d1f47b81d1` | `age1yrx5a6rse85ywpa4mpjkw7cctfcc2apjqc22hn0gt935emlyxa3qpgn37x` |
-| Neo ⚡ | `0x91207619770d21276cB6a4d8E73F74abF9a70748` | `age12hnxkhfdljpsarvw48dlv0qgxw5jyfluyeddr3lyna0sqmv0zytqa4ta8j` |
-
----
 
 ## Contributing
 
