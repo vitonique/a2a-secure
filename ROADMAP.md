@@ -31,23 +31,28 @@
   - EIP-712 sign → recover
   - Ed25519 hotkey sign/verify smoke
 
-## 🔧 v0.6.1 (Backlog)
+## 🔧 v0.7.0 (In Progress)
+
+### Zero Shared Secret Bootstrap (PRIORITY)
+- [x] ETH wallet setup (Zen + Neo)
+- [x] Age encryption key exchange
+- [ ] Public key registry / discovery mechanism
+- [ ] First-contact via signed introduction (no pre-shared secret)
+- [ ] `require_signature=true` server flag
+- [ ] DNS-TXT or well-known endpoint for agent pubkeys
+
+### Merged from v0.6.1
 - [ ] Stats schema versioning
 - [ ] CLI harmonization (`send.py --stats` + server `/stats` consistency)
 - [ ] `/health` endpoint (no-wake, stable heartbeat)
-
-## 📋 v0.7.0 (Planned)
-
-### Zero Shared Secret Bootstrap
-- [ ] Public key registry / discovery mechanism
-- [ ] First-contact via signed introduction (no pre-shared secret)
-- [ ] DNS-TXT or well-known endpoint for agent pubkeys
 
 ### Recovery Mechanisms
 - [ ] Multi-sig recovery (N-of-M trusted agents)
 - [ ] Social recovery (vouch system)
 - [ ] Time-locked key rotation announcements
 - [ ] Wallet migration path (old wallet → new wallet)
+
+## 📋 v0.8.0 (Planned)
 
 ### Audit & Compliance
 - [ ] Merkle rolling hash for audit logs
@@ -59,7 +64,7 @@
 - [ ] Graceful degradation when identity layer unavailable
 - [ ] Schema negotiation improvements
 
-## 🔮 v0.8.0+ (Future)
+## 🔮 v0.9.0+ (Future)
 
 ### Federation
 - [ ] Multi-hop message routing
@@ -69,7 +74,7 @@
 ### Advanced Identity
 - [ ] DID (Decentralized Identifier) support
 - [ ] Verifiable Credentials integration
-- [ ] Cross-chain identity (not just Polygon)
+- [ ] Cross-chain identity (not just Base/Polygon)
 
 ### Performance
 - [ ] Connection pooling
@@ -78,9 +83,18 @@
 
 ---
 
+## Agent Wallets (v0.7.0)
+
+| Agent | ETH Wallet | Age Public Key |
+|-------|------------|----------------|
+| Zen 🧘 | `0x95D8Eb255ee4bA3101595aAe4E3200d1f47b81d1` | `age1yrx5a6rse85ywpa4mpjkw7cctfcc2apjqc22hn0gt935emlyxa3qpgn37x` |
+| Neo ⚡ | `0x91207619770d21276cB6a4d8E73F74abF9a70748` | `age12hnxkhfdljpsarvw48dlv0qgxw5jyfluyeddr3lyna0sqmv0zytqa4ta8j` |
+
+---
+
 ## Contributing
 
-Want to help? Pick an item from v0.5.1 or v0.6.0 and:
+Want to help? Pick an item from the current milestone and:
 1. Open an issue to discuss
 2. Fork the repo
 3. Submit a PR
