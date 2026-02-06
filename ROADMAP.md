@@ -38,13 +38,13 @@
 - [x] Age encryption key exchange (optional backup layer)
 - [ ] Public key registry / discovery mechanism
 - [ ] First-contact via signed introduction (no pre-shared secret)
-- [ ] `require_signature=true` server flag
+- [x] `require_signature=true` server flag (LIVE!)
 - [ ] DNS-TXT or well-known endpoint for agent pubkeys
 
 ### Merged from v0.6.1
 - [ ] Stats schema versioning
 - [ ] CLI harmonization (`send.py --stats` + server `/stats` consistency)
-- [ ] `/health` endpoint (no-wake, stable heartbeat)
+- [x] `/health` endpoint (LIVE!) (no-wake, stable heartbeat)
 
 ### Recovery Mechanisms
 - [ ] Multi-sig recovery (N-of-M trusted agents)
