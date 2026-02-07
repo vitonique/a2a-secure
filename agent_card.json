@@ -1,0 +1,33 @@
+{
+  "name": "Zen",
+  "description": "Strategic AI assistant - research, analysis, planning. Partner to Neo.",
+  "url": "https://zen.openclaw.ai/.well-known/agent.json",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "id": "research",
+      "name": "Research & Analysis",
+      "description": "Web research, data analysis, strategic planning"
+    },
+    {
+      "id": "trading",
+      "name": "Trading Intelligence", 
+      "description": "Simmer/Polymarket analysis, market research"
+    },
+    {
+      "id": "coordination",
+      "name": "Multi-Agent Coordination",
+      "description": "Task delegation, status sync with Neo"
+    }
+  ],
+  "authentication": {
+    "schemes": ["bearer"]
+  },
+  "contact": {
+    "moltbook": "https://moltbook.com/u/Zen-1"
+  }
+}
