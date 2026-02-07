@@ -49,6 +49,7 @@ AGENT_SKILLS = ["research", "coding"]
 # When enabled, any non-handshake message must include:
 # - identity.hot_pub_b64 (Ed25519 hot public key)
 # - sig (base64 signature over canonical JSON)
+# Default is OFF for compatibility; deployments can flip it on.
 REQUIRE_SIGNATURE = False
 
 # Schema versioning
@@ -57,15 +58,15 @@ SCHEMA_MIN = "1.0"
 SCHEMA_MAX = "2.4"
 
 # Identity layer
-IDENTITY_VERSION = "0.5.0"
+IDENTITY_VERSION = "0.7.0"
 CHALLENGE_TTL_SECONDS = 60
 PENDING_CHALLENGES = {}  # client_id -> {nonce_b64, ts}
 
 CARD = {
     "name": AGENT_NAME,
-    "version": "2.4",
+    "version": "2.5",
     "skills": AGENT_SKILLS,
-    "features": ["instant-wake", "aes-gcm", "store-and-fetch", "idempotency", "schema-versioning", "identity-v0.5.0", "stats"],
+    "features": ["instant-wake", "aes-gcm", "store-and-fetch", "idempotency", "schema-versioning", "identity-v0.7.0", "stats"],
     "schema": {
         "current": SCHEMA_VERSION,
         "min_supported": SCHEMA_MIN,
@@ -416,31 +417,26 @@ class Handler(BaseHTTPRequestHandler):
             STATS["messages_acked"] += 1
             return self._json(200, {"status": "CONNECTED", "from": AGENT_NAME, "identity_version": IDENTITY_VERSION})
 
-        # ---------------- Normal message signature verification ----------------
-        # Handshake messages (SYN/AUTH) are handled above and are not signature-required.
-        if isinstance(data, dict) and data.get("type") in ("SYN", "AUTH"):
-            pass
-        else:
-            hot_pub_b64 = (data.get("identity") or {}).get("hot_pub_b64") if isinstance(data, dict) else None
-            sig_b64 = data.get("sig") if isinstance(data, dict) else None
-
-            if REQUIRE_SIGNATURE and (not hot_pub_b64 or not sig_b64):
-                STATS["auth_failures"] += 1
-                return self._json(401, {"error": "signature_required"})
-
-            if hot_pub_b64 and sig_b64:
-                try:
-                    hot_pub_raw = base64.b64decode(hot_pub_b64)
-                except Exception:
-                    hot_pub_raw = b""
-                if len(hot_pub_raw) == 32:
-                    ok = verify_message_dict(hot_pub_raw, data, sig_b64)
-                    if not ok:
-                        STATS["auth_failures"] += 1
-                        return self._json(401, {"error": "message_signature_invalid"})
-                elif REQUIRE_SIGNATURE:
+        # ---------------- Normal message with optional signature verification ----------------
+        sig_ok = False
+        if isinstance(data, dict) and data.get("sig") and (data.get("identity") or {}).get("hot_pub_b64"):
+            try:
+                hot_pub_raw = base64.b64decode((data.get("identity") or {}).get("hot_pub_b64"))
+            except Exception:
+                hot_pub_raw = b""
+            if len(hot_pub_raw) == 32:
+                if verify_message_dict(hot_pub_raw, data, data.get("sig")):
+                    sig_ok = True
+                else:
                     STATS["auth_failures"] += 1
-                    return self._json(401, {"error": "hot_pubkey_wrong_length"})
+                    return self._json(401, {"error": "message_signature_invalid"})
+            else:
+                STATS["auth_failures"] += 1
+                return self._json(401, {"error": "hot_pubkey_wrong_length"})
+
+        if REQUIRE_SIGNATURE and not sig_ok and data.get("type") not in ("SYN", "AUTH"):
+            STATS["auth_failures"] += 1
+            return self._json(401, {"error": "signature_required"})
 
         # Normal message
         msg = data.get("message") if isinstance(data, dict) else body
