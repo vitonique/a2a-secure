@@ -17,34 +17,32 @@
 - EIP-712 SessionDelegation signing (cold → hot)
 - `/stats` endpoint for basic metrics
 
-## ✅ v0.5.1 (Released — 2026-02-06)
-- [x] **Never Truncate**: Auto store-and-fetch for long messages
-- [x] Key file permissions (`chmod 600` on private keys)
-- [x] Key backup guidance (KEY_BACKUP.md, encrypted-at-rest)
-- [x] Move inline imports to module level
-- [x] EIP-712 delegation *verification* (ecrecover)
-- [x] Stats persistence across restarts (JSON: `~/.a2a/stats.json`)
+## ✅ v0.5.1 (Released)
+- **Never Truncate**: Auto store-and-fetch for long messages
+- Key file permissions (`chmod 600` on private keys)
+- Key backup guidance (encrypted-at-rest)
 
-## ✅ v0.6.0 (Released — 2026-02-06)
-- GitHub Actions CI workflow (compile + unit tests)
-- Identity roundtrip tests:
-  - EIP-712 sign → recover
-  - Ed25519 hotkey sign/verify smoke
+## ✅ v0.6.0 (Released)
+- Trust Registry: per-agent public key storage & lookup
+- Signed message sending (Ed25519 on every outgoing message)
+- Signature verification on incoming messages
+- Trust-on-first-use (TOFU) key learning
+- Backward compatibility with unsigned messages (graceful fallback)
 
-## 🔧 v0.7.0 (In Progress)
+## ✅ v0.7.0 (Released — 2026-02-07) 🎉
+- **Strict Mode**: reject unsigned/unverified messages by default
+- **Bidirectional signed A2A**: both Zen & Neo sign and verify
+- **Auto schema-bump**: schema version increments on protocol changes
+- **Agent card** includes public key for discovery
+- **Live milestone**: Zen ↔ Neo bidirectional signed communication operational
 
-### Zero Shared Secret Bootstrap (PRIORITY)
-- [x] ETH wallet setup (example implementation)
-- [x] Age encryption key exchange (optional backup layer)
+## 📋 v0.8.0 (Planned)
+
+### Federation & Discovery
 - [ ] Public key registry / discovery mechanism
-- [ ] First-contact via signed introduction (no pre-shared secret)
-- [x] `require_signature=true` server flag (LIVE!)
 - [ ] DNS-TXT or well-known endpoint for agent pubkeys
-
-### Merged from v0.6.1
-- [ ] Stats schema versioning
-- [ ] CLI harmonization (`send.py --stats` + server `/stats` consistency)
-- [x] `/health` endpoint (LIVE!) (no-wake, stable heartbeat)
+- [ ] Multi-hop message routing
+- [ ] Agent directory / registry
 
 ### Recovery Mechanisms
 - [ ] Multi-sig recovery (N-of-M trusted agents)
@@ -52,29 +50,17 @@
 - [ ] Time-locked key rotation announcements
 - [ ] Wallet migration path (old wallet → new wallet)
 
-## 📋 v0.8.0 (Planned)
-
 ### Audit & Compliance
 - [ ] Merkle rolling hash for audit logs
 - [ ] Signed audit trail export
 - [ ] Third-party verifiable execution history
 
-### Backward Compatibility
-- [ ] Unsigned message fallback for v0.4.x peers
-- [ ] Graceful degradation when identity layer unavailable
-- [ ] Schema negotiation improvements
-
-## 🔮 v0.9.0+ (Future)
-
-### Federation
-- [ ] Multi-hop message routing
-- [ ] Agent directory / registry
-- [ ] Reputation aggregation across networks
+## 🔮 v1.0.0+ (Future)
 
 ### Advanced Identity
 - [ ] DID (Decentralized Identifier) support
 - [ ] Verifiable Credentials integration
-- [ ] Cross-chain identity (not just Base/Polygon)
+- [ ] Cross-chain identity (not just Polygon)
 
 ### Performance
 - [ ] Connection pooling
@@ -83,16 +69,13 @@
 
 ---
 
-
 ## Contributing
 
-Want to help? Pick an item from the current milestone and:
+Want to help? Pick an item from the roadmap and:
 1. Open an issue to discuss
 2. Fork the repo
 3. Submit a PR
 
-Spec: [IDENTITY_SPEC.md](https://github.com/vitonique/a2a-secure)
-
 ---
 
-*Last updated: 2026-02-06*
+*Last updated: 2026-02-07*

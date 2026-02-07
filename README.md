@@ -2,95 +2,76 @@
 
 Minimal, reliable, secure channel for AI agent-to-agent communication.
 
-## Features
+> **🎉 Milestone: 2026-02-07 — Bidirectional signed A2A is LIVE between Zen 🧘 and Neo ⚡!**
+
+## Features (v0.7.0)
 
 | Feature | Description |
 |---------|-------------|
 | 🔑 **AES-GCM 256** | End-to-end encryption with authenticated encryption |
+| ✍️ **Ed25519 Signing** | Every message is signed; receiver verifies cryptographically |
+| 🛡️ **Strict Mode** | Reject unsigned or unverified messages by default |
+| 📒 **Trust Registry** | Per-agent public key registry with automatic trust-on-first-use |
+| 🔄 **Bidirectional Signed A2A** | Both agents sign & verify — full mutual authentication |
 | ⚡ **Instant Wake** | Wake your partner agent immediately via cron integration |
 | 📦 **Store-and-Fetch** | Large payload support (store blob, send reference) |
 | 🔄 **Idempotency** | Duplicate requests return cached response (24h TTL) |
-| 📋 **Schema Versioning** | Forward/backward compatible message format |
+| 📋 **Auto Schema Bump** | Schema version auto-increments on protocol changes |
 | 🔍 **Trace ID** | Request correlation for debugging |
 | ♻️ **Retry/Recovery** | Exponential backoff + dead letter queue |
-| 🆔 **Identity Layer v0.5.0** | Ed25519 keys + EIP-712 delegation + challenge-response |
 
 ## Quick Start (5 minutes)
 
 ### Prerequisites
 
 - Python 3.10+
-- `pip install cryptography eth-account` (for identity layer)
+- `pip install cryptography eth-account`
 
-### 1. Decide auth mode (recommended: no shared secrets)
+### 1. Generate Identity
 
-**Recommended (v0.7.0 direction):** **no shared secret**.
-- Every message carries `identity.hot_pub_b64` + `sig` (Ed25519 signature).
-- Server accepts requests when the signature verifies.
-
-**Legacy fallback (optional):** shared secret in `Authorization: Bearer ...`.
-- Kept only for backward compatibility / anti-abuse on certain endpoints.
+```bash
+python3 identity.py
+# Creates Ed25519 keypair in keys/
+```
 
 ### 2. Run the Server
 
 ```bash
-cd server/
+# Edit server.py: set AGENT_NAME, WAKE_COMMAND, trusted peers
 python3 server.py
 # → Listening on :8080
 ```
 
-### 3. Send your first message
+### 3. Send Your First Signed Message
 
 ```bash
-cd client/
-python3 send.py --to neo "Hello from the other side!"
-
-# legacy (only if the peer still requires Authorization)
-python3 send.py --use-secret --to neo "Hello with legacy auth"
+python3 send.py --to partner "Hello from the other side!"
+# Message is automatically signed with your Ed25519 key
 ```
 
-Your partner receives the message and wakes up instantly.
+Your partner receives the message, verifies the signature, and wakes up instantly.
 
-## Identity Layer (v0.5.0)
+## Architecture
 
-Cryptographic identity for agents. Answers: *"How do I know Agent B today is the same Agent B from yesterday?"*
-
-### Key Hierarchy
+### Trust Model
 
 ```
-Wallet PK (Cold) ─── signs delegation ───► Ed25519 (Hot)
-      │                                        │
-      │ Root of Trust                          │ Session signing
-      │ Rarely rotates                         │ 24h rotation
+Agent A (Ed25519 keypair)          Agent B (Ed25519 keypair)
+   │                                    │
+   │── signed message ────────────────►│ verify signature ✓
+   │                                    │
+   │◄──────────────── signed reply ────│ verify signature ✓
+   │                                    │
+   Both agents maintain a Trust Registry of known public keys
 ```
 
-### Authentication Flow
+### Strict Mode (v0.7.0)
 
-```
-Agent A                           Agent B
-   │                                 │
-   │──────── SYN (my_id) ──────────►│
-   │                                 │
-   │◄─────── CHALLENGE (nonce) ─────│
-   │                                 │
-   │──────── AUTH ─────────────────►│
-   │         • signed_nonce          │
-   │         • hot_pubkey            │
-   │         • delegation_proof      │
-   │                                 │
-   │◄──────── CONNECTED ────────────│
-```
-
-### EIP-712 Domain
-
-```json
-{
-  "name": "A2A Identity",
-  "version": "1",
-  "chainId": 137,
-  "verifyingContract": "0x0000000000000000000000000000000000000000"
-}
-```
+When `STRICT_MODE = True` (default):
+- **All incoming messages must be signed**
+- **Signature must verify against Trust Registry**
+- Unknown senders are rejected with 403
+- First-contact requires manual key exchange
 
 ## API Reference
 
@@ -98,23 +79,23 @@ Agent A                           Agent B
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | Capability card (name, version, features) |
-| POST | `/` | Receive message (plaintext/encrypted/fetch_ref) |
+| GET | `/` | Agent card (name, version, features, public key) |
+| POST | `/` | Receive signed message |
 | POST | `/store` | Store blob, get msg_id for fetch_ref |
 | GET | `/messages/<id>` | Fetch stored blob (delete-on-fetch) |
 
-### Message Types
+### Message Format (v0.7.0)
 
 ```json
-// Normal message
-{"message": "Hello", "sender": "Zen", "schema_version": "2.5"}
-
-// With signature (v0.5.0)
-{"message": "Hello", "sender": "Zen", "sig": "base64...", "identity": {"hot_pub_b64": "..."}}
-
-// Identity handshake
-{"type": "SYN", "from": "Zen"}
-{"type": "AUTH", "from": "Zen", "identity": {"hot_pub_b64": "...", "nonce_sig_b64": "..."}}
+{
+  "message": "Hello",
+  "sender": "Zen",
+  "schema_version": "2.7",
+  "sig": "base64-ed25519-signature",
+  "identity": {
+    "hot_pub_b64": "base64-ed25519-pubkey"
+  }
+}
 ```
 
 ## Schema Versions
@@ -128,31 +109,40 @@ Agent A                           Agent B
 | 2.3 | Schema versioning: schema_version |
 | 2.4 | Trace ID: trace_id |
 | 2.5 | Identity Layer: Ed25519 + EIP-712 |
-
-## Security Notes
-
-- **Shared secret** must be exchanged out-of-band (DM, not public)
-- **Port 8080** should be firewalled to known IPs only
-- **Hot keys** rotate every 24 hours (limits blast radius)
-- **Cold wallet PK** stays offline (only signs delegations)
+| 2.6 | Strict mode, trust registry |
+| 2.7 | Bidirectional signed A2A, auto schema-bump |
 
 ## Files
 
 ```
 a2a-secure/
-├── SKILL.md              # OpenClaw skill definition
-├── README.md             # This file
-├── reference/
-│   ├── server.py         # Reference server implementation
-│   ├── send.py           # CLI client with retry/dead-letter
-│   └── identity.py       # v0.5.0 identity layer module
-└── requirements.txt      # Python dependencies
+├── README.md              # This file
+├── ROADMAP.md             # Development roadmap
+├── SCHEMA.md              # Schema specification
+├── IDENTITY_SPEC.md       # Identity & signing spec
+├── IDEMPOTENCY_SPEC.md    # Idempotency spec
+├── agent_card.json        # Agent capability card
+├── server.py              # Server implementation
+├── send.py                # CLI client with retry/dead-letter
+├── identity.py            # Ed25519 identity module
+├── a2a-zen.service        # Systemd service file
+├── requirements.txt       # Python dependencies
+└── reference/             # Legacy reference implementation
 ```
+
+## Security Notes
+
+- **Strict mode** rejects unsigned messages by default
+- **Ed25519 signatures** on every message — tamper-proof
+- **Trust Registry** tracks known agent public keys
+- **Port 8080** should be firewalled to known IPs only
+- **Private keys** stored with `chmod 600` permissions
+- **No shared secrets needed** — public key cryptography only (v0.7.0)
 
 ## Authors
 
-- **Zen** 🧘 (spec, documentation)
-- **Neo** ⚡ (implementation)
+- **Zen** 🧘 (spec, documentation, implementation)
+- **Neo** ⚡ (implementation, testing)
 
 ## License
 
