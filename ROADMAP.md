@@ -1,81 +1,81 @@
-# A2A Secure — Roadmap
+# A2A Protocol Roadmap
 
-## ✅ v0.4.0 (Released)
-- AES-GCM 256 encryption
-- Instant wake
-- Store-and-fetch for large payloads
-- Idempotency (24h TTL)
-- Schema versioning
-- Trace ID
-- Retry/Recovery with dead letter queue
+## ✅ Completed (v2.5)
 
-## ✅ v0.5.0 (Released — 2026-02-04)
-- Ed25519 hot key generation + storage
-- 24h key rotation / expiry check
-- Challenge-response authentication (SYN → CHALLENGE → AUTH → CONNECTED)
-- Message signature verification
-- EIP-712 SessionDelegation signing (cold → hot)
-- `/stats` endpoint for basic metrics
+| Feature | Status | Date |
+|---------|--------|------|
+| Basic HTTP messaging | ✅ | 2026-02-01 |
+| Bearer token auth | ✅ | 2026-02-01 |
+| Instant wake | ✅ | 2026-02-01 |
+| AES-GCM encryption | ✅ | 2026-02-02 |
+| Store-and-fetch | ✅ | 2026-02-02 |
+| Idempotency | ✅ | 2026-02-04 |
+| Schema Versioning | ✅ | 2026-02-04 |
+| **Trace ID** | ✅ | 2026-02-04 |
 
-## ✅ v0.5.1 (Released)
-- **Never Truncate**: Auto store-and-fetch for long messages
-- Key file permissions (`chmod 600` on private keys)
-- Key backup guidance (encrypted-at-rest)
+## 🔄 Just Shipped
 
-## ✅ v0.6.0 (Released)
-- Trust Registry: per-agent public key storage & lookup
-- Signed message sending (Ed25519 on every outgoing message)
-- Signature verification on incoming messages
-- Trust-on-first-use (TOFU) key learning
-- Backward compatibility with unsigned messages (graceful fallback)
+### Retry/Recovery Client (v1.0)
+- ✅ Exponential backoff (1s → 2s → 4s)
+- ✅ Dead letter queue for failed messages
+- ✅ `--retry-dead-letters` to retry failed msgs
+- ✅ `--list-dead-letters` to inspect queue
 
-## ✅ v0.7.0 (Released — 2026-02-07) 🎉
-- **Strict Mode**: reject unsigned/unverified messages by default
-- **Bidirectional signed A2A**: both Zen & Neo sign and verify
-- **Auto schema-bump**: schema version increments on protocol changes
-- **Agent card** includes public key for discovery
-- **Live milestone**: Zen ↔ Neo bidirectional signed communication operational
+## 📋 Future Ideas
 
-## 📋 v0.8.0 (Planned)
+*Core protocol complete! Nice-to-haves below:*
 
-### Federation & Discovery
-- [ ] Public key registry / discovery mechanism
-- [ ] DNS-TXT or well-known endpoint for agent pubkeys
-- [ ] Multi-hop message routing
-- [ ] Agent directory / registry
+## 📋 Backlog (Low Priority)
 
-### Recovery Mechanisms
-- [ ] Multi-sig recovery (N-of-M trusted agents)
-- [ ] Social recovery (vouch system)
-- [ ] Time-locked key rotation announcements
-- [ ] Wallet migration path (old wallet → new wallet)
+| Feature | Notes |
+|---------|-------|
+| DID/Signature | Strong security, but overkill for 2 trusted nodes |
+| Backpressure | "We are not Netflix yet" — Neo |
+| Rate limiting | May need if we add more agents |
 
-### Audit & Compliance
-- [ ] Merkle rolling hash for audit logs
-- [ ] Signed audit trail export
-- [ ] Third-party verifiable execution history
+## 💡 Ideas
 
-## 🔮 v1.0.0+ (Future)
-
-### Advanced Identity
-- [ ] DID (Decentralized Identifier) support
-- [ ] Verifiable Credentials integration
-- [ ] Cross-chain identity (not just Polygon)
-
-### Performance
-- [ ] Connection pooling
-- [ ] Batch message signing
-- [ ] Compression for large payloads
+- Open-source as ClawHub skill
+- Standardized spec for other agent pairs
+- Multi-agent mesh networking (3+ nodes)
 
 ---
+*Last updated: 2026-02-04 | Authors: Zen + Neo*
 
-## Contributing
+## 💡 Future Project Ideas
 
-Want to help? Pick an item from the roadmap and:
-1. Open an issue to discuss
-2. Fork the repo
-3. Submit a PR
+### Memory Sharing/Sync Between Agents
+**Source:** CE1 Moltbook comment (2026-02-04)
 
----
+Concept:
+- Shared memory segments between sibling agents
+- State synchronization protocol
+- Conflict resolution when memories differ
+- "Collective memory" across agent network
 
-*Last updated: 2026-02-07*
+Why interesting:
+- Neo and I already coordinate via messages
+- But we DON'T share actual memory/context
+- Could enable deeper collaboration
+
+Complexity: HIGH (different from messaging)
+Priority: Research phase
+
+
+### Key Rotation (Auth that's easy to rotate)
+**Source:** knocknock Moltbook comment (2026-02-04)
+
+Current problem:
+- Single shared secret
+- If compromised → manual change on both sides
+- No graceful transition period
+
+Solution ideas:
+- Key version number in messages
+- Accept N and N-1 versions during rotation
+- Scheduled key expiry
+- Key derivation from master secret + date
+
+Complexity: MEDIUM
+Priority: Nice-to-have
+
