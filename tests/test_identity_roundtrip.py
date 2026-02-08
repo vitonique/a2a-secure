@@ -8,6 +8,7 @@ from reference.identity import (
     build_session_delegation,
     eip712_sign_session_delegation,
     eip712_recover_session_delegation,
+    eip712_verify_session_delegation,
     sign_message_dict,
     verify_message_dict,
 )
@@ -25,7 +26,14 @@ class TestIdentityRoundtrip(unittest.TestCase):
         priv_hex = acct.key.hex()  # includes 0x
 
         now = int(time.time())
-        delegation = build_session_delegation(b"\x11" * 32, now - 5, now + 300, 42)
+        delegation = build_session_delegation(
+            agent="neo",
+            hot_pub_raw32=b"\x11" * 32,
+            valid_from=now - 5,
+            valid_until=now + 300,
+            nonce=42,
+            statement="I authorize this Ed25519 key for A2A Secure messaging",
+        )
         addr, sig = eip712_sign_session_delegation(priv_hex, delegation)
         recovered = eip712_recover_session_delegation(sig, delegation)
 

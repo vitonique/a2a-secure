@@ -191,30 +191,50 @@ def verify_nonce_sig(pub_raw32: bytes, nonce_b64: str, sig_b64: str) -> bool:
 # ------------------- EIP-712 SessionDelegation -------------------
 
 EIP712_DOMAIN = {
-    "name": "A2A Identity",
+    "name": "A2A-Secure",
     "version": "1",
-    "chainId": 137,
+    "chainId": 8453,  # Base
     "verifyingContract": "0x0000000000000000000000000000000000000000",
 }
 
 EIP712_TYPES = {
     "SessionDelegation": [
+        {"name": "agent", "type": "string"},
         {"name": "hotPubKey", "type": "bytes32"},
         {"name": "validFrom", "type": "uint256"},
         {"name": "validUntil", "type": "uint256"},
         {"name": "nonce", "type": "uint256"},
+        {"name": "statement", "type": "string"},
     ]
 }
 
 
-def build_session_delegation(hot_pub_raw32: bytes, valid_from: int, valid_until: int, nonce: int) -> Dict[str, Any]:
+def build_session_delegation(
+    agent: str,
+    hot_pub_raw32: bytes,
+    valid_from: int,
+    valid_until: int,
+    nonce: int,
+    statement: str,
+) -> Dict[str, Any]:
+    """Build an EIP-712 SessionDelegation message.
+
+    hot_pub_raw32 must be 32 bytes (raw Ed25519 public key).
+    valid_until=0 means "no expiry".
+    """
+    if not isinstance(agent, str) or not agent:
+        raise ValueError("agent_required")
     if len(hot_pub_raw32) != 32:
         raise ValueError("hot_pubkey_must_be_32_bytes")
+    if not isinstance(statement, str) or not statement:
+        raise ValueError("statement_required")
     return {
+        "agent": agent,
         "hotPubKey": hot_pub_raw32,
         "validFrom": int(valid_from),
         "validUntil": int(valid_until),
         "nonce": int(nonce),
+        "statement": statement,
     }
 
 
@@ -242,10 +262,12 @@ def eip712_sign_session_delegation(wallet_privkey_hex: str, delegation: Dict[str
         "primaryType": "SessionDelegation",
         "domain": EIP712_DOMAIN,
         "message": {
+            "agent": delegation["agent"],
             "hotPubKey": delegation["hotPubKey"],
             "validFrom": int(delegation["validFrom"]),
             "validUntil": int(delegation["validUntil"]),
             "nonce": int(delegation["nonce"]),
+            "statement": delegation["statement"],
         },
     }
 
@@ -282,10 +304,12 @@ def eip712_recover_session_delegation(signature_hex: str, delegation: Dict[str, 
         "primaryType": "SessionDelegation",
         "domain": EIP712_DOMAIN,
         "message": {
+            "agent": delegation["agent"],
             "hotPubKey": delegation["hotPubKey"],
             "validFrom": int(delegation["validFrom"]),
             "validUntil": int(delegation["validUntil"]),
             "nonce": int(delegation["nonce"]),
+            "statement": delegation["statement"],
         },
     }
 
@@ -296,4 +320,45 @@ def eip712_recover_session_delegation(signature_hex: str, delegation: Dict[str, 
 
 def eip712_delegation_valid_now(delegation: Dict[str, Any], now: Optional[int] = None) -> bool:
     now_i = int(now or time.time())
-    return int(delegation["validFrom"]) <= now_i <= int(delegation["validUntil"])
+    valid_from = int(delegation["validFrom"])
+    valid_until = int(delegation["validUntil"])
+    if now_i < valid_from:
+        return False
+    if valid_until == 0:
+        return True
+    return now_i <= valid_until
+
+
+def eip712_verify_session_delegation(
+    signature_hex: str,
+    delegation: Dict[str, Any],
+    expected_cold_address: str,
+    *,
+    last_known_nonce: int = 0,
+    now: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Verify an EIP-712 delegation end-to-end.
+
+    Checks:
+    - ecrecover(signature, typed_data_hash) == expected_cold_address
+    - validity window (validUntil==0 means no expiry)
+    - monotonic nonce: delegation.nonce >= last_known_nonce
+
+    Returns: (ok, reason)
+    """
+    try:
+        recovered = eip712_recover_session_delegation(signature_hex, delegation)
+    except Exception as e:
+        return False, f"ecrecover_failed: {e}"
+
+    if recovered.lower() != expected_cold_address.lower():
+        return False, "cold_address_mismatch"
+
+    if not eip712_delegation_valid_now(delegation, now=now):
+        return False, "delegation_not_valid_now"
+
+    nonce = int(delegation.get("nonce", 0))
+    if nonce < int(last_known_nonce):
+        return False, "delegation_nonce_too_low"
+
+    return True, "ok"
